@@ -1,0 +1,33 @@
+version: '3'
+
+tasks:
+  setup:
+    cmds:
+      - kubectl config set-context --current --namespace=duocnv
+  wire:
+    silent: true
+    cmds:
+      - wire ./cmd/server/...
+  dev:
+    silent: true
+    ignore_error: true
+    cmds:
+      - defer: devspace reset pods
+      - devspace dev
+  apply:
+    silent: true
+    env:
+      KOCACHE: true
+    cmds:
+      - ko apply -f kubectl.yaml
+  build:
+    silent: true
+    sources:
+      - ./cmd/**/*.go
+      - ./internal/**/*.go
+    generates:
+      - ./bin/server
+    cmds:
+      - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o ./bin/server ./cmd/server/...
+      - zip bin/server.zip bin/server
+      - echo "Build done"

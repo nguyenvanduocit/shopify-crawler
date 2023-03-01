@@ -1,0 +1,12 @@
+builds:
+  - id: server
+    defaultBaseImage: gcr.io/distroless/static:latest
+    dir: .
+    main: ./cmd/server
+    env:
+      - GOOS=linux
+      - GOARCH=amd64
+      - CGO_ENABLED=0
+    ldflags:
+      - -s
+      - -w

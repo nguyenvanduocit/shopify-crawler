@@ -1,0 +1,142 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shopifycrawler
+  labels:
+    app: shopifycrawler-app
+spec:
+  selector:
+    matchLabels:
+      app: shopifycrawler-app
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: shopifycrawler-app
+      name: shopifycrawler
+    spec:
+      restartPolicy: Always
+      imagePullSecrets:
+        - name: gitlab-k8s-deploy-token
+      containers:
+        - image: ko://gitlab.firegroup.io/internal/shopifycrawler/cmd/server
+          env:
+            - name: PORT
+              value: "8080"
+            - name: KAFKA_BROKERS
+              value: kafka-0.shopifycrawler-kafka-svc.duocnv.svc.cluster.local:9092,kafka-1.shopifycrawler-kafka-svc.duocnv.svc.cluster.local:9092,kafka-2.shopifycrawler-kafka-svc.duocnv.svc.cluster.local:9092
+          name: shopifycrawler
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 3
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: shopifycrawler-svc
+spec:
+  ports:
+    - name: "8080"
+      port: 8080
+  selector:
+    app: shopifycrawler-app
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shopifycrawler-ingress
+spec:
+  tls:
+    - hosts:
+        - "shopifycrawler.fireapps.tech"
+      secretName: fireapps-tech-tls-wildcard
+  rules:
+    - host: "shopifycrawler.fireapps.tech"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: shopifycrawler-svc
+                port:
+                  number: 8080
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: shopifycrawler-kafka-svc
+  labels:
+    app: shopifycrawler-kafka-app
+spec:
+  clusterIP: None
+  ports:
+    - name: '9092'
+      port: 9092
+      protocol: TCP
+      targetPort: 9092
+  selector:
+    app: shopifycrawler-kafka-app
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: shopifycrawler-kafka
+  labels:
+    app: shopifycrawler-kafka-app
+spec:
+  serviceName: shopifycrawler-kafka-svc
+  replicas: 3
+  selector:
+    matchLabels:
+      app: shopifycrawler-kafka-app
+  template:
+    metadata:
+      labels:
+        app: shopifycrawler-kafka-app
+    spec:
+      containers:
+        - image: doughgle/kafka-kraft
+          ports:
+            - containerPort: 9092
+            - containerPort: 9093
+          env:
+            - name: REPLICAS
+              value: '3'
+            - name: SERVICE
+              value: shopifycrawler-kafka-svc
+            - name: NAMESPACE
+              value: duocnv
+            - name: SHARE_DIR
+              value: /mnt/kafka
+            - name: CLUSTER_ID
+              value: oh-sxaDRTcyAr6pFRbXyzA
+            - name: DEFAULT_REPLICATION_FACTOR
+              value: '3'
+            - name: DEFAULT_MIN_INSYNC_REPLICAS
+              value: '2'
+          volumeMounts:
+            - name: data
+              mountPath: /mnt/kafka
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - "ReadWriteOnce"
+        resources:
+          requests:
+            storage: "1Gi"
