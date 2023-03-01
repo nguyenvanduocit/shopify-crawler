@@ -31,5 +31,4 @@ func main() {
 		fmt.Println("Server is done, shutting down...")
 		return
 	}
-
 }

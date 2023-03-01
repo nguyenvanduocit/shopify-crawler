@@ -18,7 +18,7 @@ var DefaultModuleWireSet = wire.NewSet(
 
 func NewModuleList(
 	linkCollector *linkcollector.LinkCollectorModule,
-) []Module {
+) []*cqrs.CommandHandler {
 	return []Module{
 		linkCollector,
 	}

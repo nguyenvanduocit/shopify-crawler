@@ -15,57 +15,16 @@ import (
 
 var DefaultCqrsWireSet = wire.NewSet(
 	router.DefaultRouterWireSet,
-	NewCqrsSvc,
+	NewCqrs,
 )
 
-type CqrsSvc struct {
-	cqrsFacade      *cqrs.Facade
-	zapLogger       *zap.Logger
-	router          *message.Router
-	eventHandlers   []cqrs.EventHandler
-	commandHandlers []cqrs.CommandHandler
-}
-
-func NewCqrsSvc(
+func NewCqrs(
 	zapLogger *zap.Logger,
 	router *message.Router,
-) (*CqrsSvc, func(), error) {
-	return &CqrsSvc{
-		zapLogger: zapLogger,
-		router:    router,
-	}, func() {}, nil
-}
+	
+) (*cqrs.Facade, error) {
 
-func (c *CqrsSvc) AddCommandHandler(handler cqrs.CommandHandler) {
-	c.commandHandlers = append(c.commandHandlers, handler)
-}
-
-func (c *CqrsSvc) AddEventHandler(handler cqrs.EventHandler) {
-	c.eventHandlers = append(c.eventHandlers, handler)
-}
-
-func (c *CqrsSvc) listCommandHandlers(commandBus *cqrs.CommandBus, eventBus *cqrs.EventBus) []cqrs.CommandHandler {
-	return c.commandHandlers
-}
-
-func (c *CqrsSvc) listEventHandlers(commandBus *cqrs.CommandBus, eventBus *cqrs.EventBus) []cqrs.EventHandler {
-	return c.eventHandlers
-}
-
-func (c *CqrsSvc) GetFacade() (*cqrs.Facade, error) {
-	if c.cqrsFacade == nil {
-		var err error
-		c.cqrsFacade, err = c.newFacade()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return c.cqrsFacade, nil
-}
-
-func (c *CqrsSvc) newFacade() (*cqrs.Facade, error) {
-	logger := watermillzap.NewLogger(c.zapLogger)
+	logger := watermillzap.NewLogger(zapLogger)
 	saramaSubscriberConfig := kafka.DefaultSaramaSubscriberConfig()
 	saramaSubscriberConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
 
@@ -126,10 +85,14 @@ func (c *CqrsSvc) newFacade() (*cqrs.Facade, error) {
 		CommandEventMarshaler: cqrs.JSONMarshaler{},
 		CommandsPublisher:     commandsPublisher,
 		EventsPublisher:       eventsPublisher,
-		Router:                c.router,
+		Router:                router,
 		Logger:                logger,
-		CommandHandlers:       c.listCommandHandlers,
-		EventHandlers:         c.listEventHandlers,
+		CommandHandlers: func(commandBus *cqrs.CommandBus, eventBus *cqrs.EventBus) []cqrs.CommandHandler {
+			return []cqrs.CommandHandler{}
+		},
+		EventHandlers: func(commandBus *cqrs.CommandBus, eventBus *cqrs.EventBus) []cqrs.EventHandler {
+			return []cqrs.EventHandler{}
+		},
 	})
 
 	if err != nil {
