@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -18,7 +19,7 @@ type App struct {
 	Headline    string
 	Description string
 	URL         string
-	ReviewCount string
+	ReviewCount int32
 	Features    []string
 	Categories  []string
 }
@@ -36,12 +37,9 @@ func main() {
 	var appIndex map[string]*App = make(map[string]*App)
 
 	defer func() {
-		// recover from panic if one occured. Set err to nil otherwise.
 		if r := recover(); r != nil {
-			fmt.Println("Recovered in f", r)
+			fmt.Println("Recovered", r)
 		}
-
-		// write to json file
 
 		content, err := json.Marshal(apps)
 		if err != nil {
@@ -59,7 +57,7 @@ func main() {
 
 	c.Limit(&colly.LimitRule{
 		DomainGlob:  "*",
-		Parallelism: 5,
+		Parallelism: 2,
 		RandomDelay: 5 * time.Second,
 	})
 
@@ -86,10 +84,6 @@ func main() {
 		if len(apps) < 100 {
 			e.Request.Visit(target)
 		}
-	})
-
-	c.OnRequest(func(r *colly.Request) {
-		fmt.Println("Visiting", r.URL)
 	})
 
 	c.OnHTML("body[id=AppDetailsShow]", func(e *colly.HTMLElement) {
@@ -130,7 +124,16 @@ func parseApp(dom *goquery.Selection) (*App, error) {
 	app.Name = strings.TrimSpace(dom.Find("#adp-hero h1").First().Text())
 	app.Headline = strings.TrimSpace(dom.Find("#app-details > h2").First().Text())
 	app.Description = strings.TrimSpace(dom.Find("#app-details > p").First().Text())
-	app.ReviewCount = strings.TrimSpace(dom.Find("a[href=\"#adp-reviews\"]").First().Text())
+	// parse 12,445 to 12445
+
+	reviewCountText := strings.TrimSpace(dom.Find("a[href=\"#adp-reviews\"]").First().Text())
+	reviewCountText = strings.ReplaceAll(reviewCountText, ",", "")
+	reviewCount, err := strconv.ParseInt(reviewCountText, 10, 32)
+	if err != nil {
+		fmt.Println(err)
+		reviewCount = 0
+	}
+	app.ReviewCount = int32(reviewCount)
 
 	dom.Find("#app-details > ul > li").Each(func(i int, s *goquery.Selection) {
 		app.Features = append(app.Features, strings.TrimSpace(s.Text()))
